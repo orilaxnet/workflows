@@ -12,22 +12,30 @@ jobs:
         with:
           python-version: '3.11'
           
-      - name: Install Tools & Fix Versions
+      - name: Install Tools & Fix Dependency Conflict
         run: |
           python -m pip install --upgrade pip setuptools
-          # اجبار به نصب نسخه ۱ نامپای برای جلوگیری از کرش باینری
-          pip install "numpy<2.0" "scikit-learn==1.5.1" "coremltools==8.0" torch torchvision diffusers==0.25.1 transformers==4.36.2 huggingface-hub pytest diffusionkit scipy ftfy accelerate
+          # قفل کردن نسخه‌ها برای پایداری ۱۰۰٪ در محیط مک
+          pip install \
+            "numpy<2.0" \
+            "scikit-learn==1.5.1" \
+            "huggingface_hub==0.20.3" \
+            "diffusers==0.25.1" \
+            "transformers==4.36.2" \
+            "coremltools==8.0" \
+            torch torchvision \
+            scipy ftfy accelerate pytest diffusionkit
+          
           git clone https://github.com/apple/ml-stable-diffusion
           
       - name: Run Conversion
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          # معرفی مسیر ماژول به سیستم عامل
           PYTHONPATH: ${{ github.workspace }}/ml-stable-diffusion
         run: |
           cd ml-stable-diffusion
           
-          # ۱. تبدیل مدل اصلی LCM (iPhone 12 Optimized)
+          # ۱. تبدیل مدل اصلی LCM (بهینه‌سازی شده برای ANE آیفون ۱۲)
           python -m python_coreml_stable_diffusion.torch2coreml \
             --convert-unet --convert-text-encoder --convert-vae-decoder --convert-safety-checker \
             --model-version "SimianLuo/LCM_Dreamshaper_v7" \
@@ -43,5 +51,5 @@ jobs:
       - name: Zip & Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iPhone12-LCM-Scribble-6bit
+          name: iPhone12-LCM-Scribble-Final-Model
           path: ./output
