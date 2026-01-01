@@ -23,37 +23,37 @@ jobs:
           python-version: "3.11"
 
       # ------------------------------------------------------------
-      # 3. Install Dependencies (Pinned & Compatible)
+      # 3. Install Dependencies (STRICTLY PINNED)
       # ------------------------------------------------------------
-      - name: Install tools and fix versions
+      - name: Install tools and pinned versions
         run: |
           python -m pip install --upgrade pip setuptools wheel
 
-          # جلوگیری از کرش باینری
+          # جلوگیری از ناسازگاری باینری
           pip install "numpy<2.0"
 
-          # نسخه‌های سازگار با ml-stable-diffusion
+          # پکیج‌های اصلی – نسخه‌ها عمداً قفل شده‌اند
           pip install \
             torch torchvision \
             coremltools==8.0 \
             diffusers==0.25.1 \
             transformers==4.36.2 \
-            huggingface-hub>=0.20.0 \
+            huggingface-hub==0.20.3 \
             accelerate \
             scipy \
             ftfy \
             pytest
 
-          # diffusionkit الزام مستقیم Apple است
-          pip install diffusionkit
+          # الزام مستقیم Apple
+          pip install diffusionkit==0.5.2
 
-          # کلون ریپوی رسمی Apple
+          # ریپوی رسمی Apple
           git clone https://github.com/apple/ml-stable-diffusion.git
 
       # ------------------------------------------------------------
-      # 4. Convert LCM Base Model (NO fp16 VARIANT)
+      # 4. Convert LCM Dreamshaper (NO fp16 VARIANT)
       # ------------------------------------------------------------
-      - name: Convert LCM Dreamshaper v7 (6-bit, iPhone 12)
+      - name: Convert LCM Dreamshaper v7 (6-bit)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}/ml-stable-diffusion
@@ -74,7 +74,7 @@ jobs:
             --bundle-resources-for-swift-cli
 
       # ------------------------------------------------------------
-      # 5. Convert ControlNet Scribble (NO fp16 VARIANT)
+      # 5. Convert ControlNet Scribble
       # ------------------------------------------------------------
       - name: Convert ControlNet Scribble (6-bit)
         env:
@@ -92,7 +92,7 @@ jobs:
             -o ../output
 
       # ------------------------------------------------------------
-      # 6. Zip & Upload Artifact
+      # 6. Upload Artifact
       # ------------------------------------------------------------
       - name: Upload CoreML models
         uses: actions/upload-artifact@v4
