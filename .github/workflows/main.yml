@@ -1,4 +1,4 @@
-name: iPhone 12 CoreML Converter
+name: iPhone 12+ CoreML Converter
 
 on:
   workflow_dispatch:
@@ -6,89 +6,63 @@ on:
 jobs:
   convert:
     runs-on: macos-14
-
     steps:
-      # ------------------------------------------------------------
-      # 1. Checkout
-      # ------------------------------------------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      # ۱. clone repo اصلی
+      - uses: actions/checkout@v4
 
-      # ------------------------------------------------------------
-      # 2. Python
-      # ------------------------------------------------------------
+      # ۲. نصب پایتون و ابزارها
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
-      # ------------------------------------------------------------
-      # 3. Install BASE dependencies (pinned)
-      # ------------------------------------------------------------
-      - name: Install base dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
+          # نصب نسخه های مشخص شده برای جلوگیری از خطا
+          pip install "numpy<2.0" "scikit-learn==1.5.1" \
+            "coremltools==9.0" torch torchvision diffusers==0.25.1 \
+            transformers==4.36.2 huggingface-hub==0.19.4 \
+            accelerate==0.32.1 ftfy diffusionkit==0.5.2 \
+            sentencepiece wandb pydantic pydantic-core
 
-          pip install "numpy<2.0"
+          git clone https://github.com/apple/ml-stable-diffusion
 
-          pip install \
-            torch torchvision \
-            diffusers==0.25.1 \
-            transformers==4.36.2 \
-            huggingface-hub==0.20.3 \
-            accelerate \
-            scipy \
-            ftfy \
-            pytest
-
-          # CoreML — دقیقاً نسخهٔ سازگار با Apple repo
-          pip install coremltools==8.0
-
-      # ------------------------------------------------------------
-      # 4. Install diffusionkit WITHOUT deps (CRITICAL)
-      # ------------------------------------------------------------
-      - name: Install diffusionkit safely
-        run: |
-          pip install diffusionkit==0.5.2 --no-deps
-
-          # enforce versions AGAIN (pip safety)
-          pip install coremltools==8.0 huggingface-hub==0.20.3
-
-      # ------------------------------------------------------------
-      # 5. Clone Apple repo
-      # ------------------------------------------------------------
-      - name: Clone ml-stable-diffusion
-        run: |
-          git clone https://github.com/apple/ml-stable-diffusion.git
-
-      # ------------------------------------------------------------
-      # 6. Convert LCM Dreamshaper v7
-      # ------------------------------------------------------------
-      - name: Convert LCM Dreamshaper v7 (6-bit)
+      # ۳. تبدیل مدل اصلی Stable Diffusion
+      - name: Convert SD Model to CoreML
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}/ml-stable-diffusion
         run: |
           cd ml-stable-diffusion
-
           python -m python_coreml_stable_diffusion.torch2coreml \
-            --model-version "SimianLuo/LCM_Dreamshaper_v7" \
-            --variant none \
             --convert-unet \
             --convert-text-encoder \
             --convert-vae-decoder \
             --convert-safety-checker \
+            --model-version "runwayml/stable-diffusion-v1-5" \
             --quantize-nbits 6 \
             --chunk-unet \
             --attention-implementation SPLIT_EINSUM \
-            -o ../output \
-            --bundle-resources-for-swift-cli
+            -o ../output --bundle-resources-for-swift-cli
 
-      # ------------------------------------------------------------
-      # 7. Upload artifacts
-      # ------------------------------------------------------------
-      - name: Upload CoreML models
+      # ۴. اختیاری: تبدیل ControlNet Scribble
+      - name: Convert ControlNet (optional)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}/ml-stable-diffusion
+        run: |
+          cd ml-stable-diffusion
+          python -m python_coreml_stable_diffusion.torch2coreml \
+            --convert-controlnet \
+            --controlnet-model-version "lllyasviel/sd-controlnet-scribble" \
+            --model-version "runwayml/stable-diffusion-v1-5" \
+            --quantize-nbits 6 \
+            -o ../output
+
+      # ۵. آرشیو و آپلود خروجی
+      - name: Upload CoreML Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iPhone12-LCM-6bit
-          path: output
+          name: SD-iPhone12Plus-CoreML
+          path: ./output
