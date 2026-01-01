@@ -12,14 +12,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. نصب پایتون پایدار
+      # 2. نصب پایتون
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 3. نصب وابستگی‌ها (نسخه‌های کاملاً سازگار)
-      - name: Install dependencies (stable matrix)
+      # 3. نصب وابستگی‌ها (ماتریس پایدار و تست‌شده)
+      - name: Install dependencies (FULL & STABLE)
         run: |
           python -m pip install --upgrade pip setuptools
 
@@ -33,6 +33,7 @@ jobs:
             "torch==2.1.2" \
             "torchvision==0.16.2" \
             "coremltools==8.0" \
+            "diffusionkit==0.5.2" \
             scipy \
             ftfy \
             sentencepiece \
@@ -42,15 +43,15 @@ jobs:
           # کلون ریپوی رسمی اپل
           git clone https://github.com/apple/ml-stable-diffusion
 
-      # 4. تبدیل مدل‌ها به CoreML
-      - name: Convert LCM + ControlNet (iPhone 12 optimized)
+      # 4. تبدیل مدل‌ها به CoreML (بهینه برای iPhone 12)
+      - name: Convert LCM + ControlNet (iPhone 12 Optimized)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}/ml-stable-diffusion
         run: |
           cd ml-stable-diffusion
 
-          # ---- Phase 1: LCM Base Model ----
+          # -------- Phase 1: LCM Base Model --------
           python -m python_coreml_stable_diffusion.torch2coreml \
             --convert-unet \
             --convert-text-encoder \
@@ -63,7 +64,7 @@ jobs:
             -o ../output \
             --bundle-resources-for-swift-cli
 
-          # ---- Phase 2: ControlNet Scribble ----
+          # -------- Phase 2: ControlNet Scribble --------
           python -m python_coreml_stable_diffusion.torch2coreml \
             --convert-controlnet \
             --controlnet-model-version "lllyasviel/sd-controlnet-scribble" \
@@ -71,7 +72,7 @@ jobs:
             --quantize-nbits 6 \
             -o ../output
 
-      # 5. خروجی نهایی
+      # 5. آپلود خروجی
       - name: Upload CoreML Artifact
         uses: actions/upload-artifact@v4
         with:
