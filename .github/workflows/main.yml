@@ -15,27 +15,24 @@ jobs:
         uses: actions/checkout@v4
 
       # ------------------------------------------------------------
-      # 2. Python Setup
+      # 2. Python
       # ------------------------------------------------------------
-      - name: Set up Python 3.11
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       # ------------------------------------------------------------
-      # 3. Install Dependencies (STRICTLY PINNED)
+      # 3. Install BASE dependencies (pinned)
       # ------------------------------------------------------------
-      - name: Install tools and pinned versions
+      - name: Install base dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
 
-          # جلوگیری از ناسازگاری باینری
           pip install "numpy<2.0"
 
-          # پکیج‌های اصلی – نسخه‌ها عمداً قفل شده‌اند
           pip install \
             torch torchvision \
-            coremltools==8.0 \
             diffusers==0.25.1 \
             transformers==4.36.2 \
             huggingface-hub==0.20.3 \
@@ -44,14 +41,28 @@ jobs:
             ftfy \
             pytest
 
-          # الزام مستقیم Apple
-          pip install diffusionkit==0.5.2
+          # CoreML — دقیقاً نسخهٔ سازگار با Apple repo
+          pip install coremltools==8.0
 
-          # ریپوی رسمی Apple
+      # ------------------------------------------------------------
+      # 4. Install diffusionkit WITHOUT deps (CRITICAL)
+      # ------------------------------------------------------------
+      - name: Install diffusionkit safely
+        run: |
+          pip install diffusionkit==0.5.2 --no-deps
+
+          # enforce versions AGAIN (pip safety)
+          pip install coremltools==8.0 huggingface-hub==0.20.3
+
+      # ------------------------------------------------------------
+      # 5. Clone Apple repo
+      # ------------------------------------------------------------
+      - name: Clone ml-stable-diffusion
+        run: |
           git clone https://github.com/apple/ml-stable-diffusion.git
 
       # ------------------------------------------------------------
-      # 4. Convert LCM Dreamshaper (NO fp16 VARIANT)
+      # 6. Convert LCM Dreamshaper v7
       # ------------------------------------------------------------
       - name: Convert LCM Dreamshaper v7 (6-bit)
         env:
@@ -74,28 +85,10 @@ jobs:
             --bundle-resources-for-swift-cli
 
       # ------------------------------------------------------------
-      # 5. Convert ControlNet Scribble
-      # ------------------------------------------------------------
-      - name: Convert ControlNet Scribble (6-bit)
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          PYTHONPATH: ${{ github.workspace }}/ml-stable-diffusion
-        run: |
-          cd ml-stable-diffusion
-
-          python -m python_coreml_stable_diffusion.torch2coreml \
-            --model-version "runwayml/stable-diffusion-v1-5" \
-            --controlnet-model-version "lllyasviel/sd-controlnet-scribble" \
-            --variant none \
-            --convert-controlnet \
-            --quantize-nbits 6 \
-            -o ../output
-
-      # ------------------------------------------------------------
-      # 6. Upload Artifact
+      # 7. Upload artifacts
       # ------------------------------------------------------------
       - name: Upload CoreML models
         uses: actions/upload-artifact@v4
         with:
-          name: iPhone12-LCM-ControlNet-6bit
+          name: iPhone12-LCM-6bit
           path: output
