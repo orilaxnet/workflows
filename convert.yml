@@ -1,0 +1,33 @@
+name: CoreML Stable Diffusion Convert
+on: workflow_dispatch # اجرای دستی با یک دکمه
+
+jobs:
+  convert:
+    runs-on: macos-14 # استفاده از سرور مک با پردازنده M1/M2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Tools
+        run: |
+          pip install coremltools==8.0 torch torchvision diffusers transformers huggingface-hub pytest diffusionkit
+          git clone https://github.com/apple/ml-stable-diffusion
+          
+      - name: Run Conversion (iPhone 12 Optimized)
+        run: |
+          python -m python_coreml_stable_diffusion.torch2coreml \
+            --convert-unet --convert-text-encoder --convert-vae-decoder --convert-safety-checker \
+            --model-version "SimianLuo/LCM_Dreamshaper_v7" \
+            --quantize-nbits 6 --chunk-unet --attention-implementation SPLIT_EINSUM \
+            -o ./output --bundle-resources-for-swift-cli
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+      - name: Upload Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: iPhone12-CoreML-Model
+          path: ./output
