@@ -1,0 +1,43 @@
+name: iPhone 12 CoreML Converter
+on: workflow_dispatch # اجرای دستی
+
+jobs:
+  convert:
+    runs-on: macos-14 # استفاده از پردازنده M1/M2 گیت‌هاب
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Tools & Fix Versions
+        run: |
+          pip install --upgrade pip setuptools
+          # نصب نسخه‌های پایدار برای جلوگیری از تداخل
+          pip install "scikit-learn==1.5.1" "coremltools>=7.1" torch torchvision diffusers==0.25.1 transformers==4.36.2 huggingface-hub pytest diffusionkit scipy ftfy accelerate
+          git clone https://github.com/apple/ml-stable-diffusion
+          
+      - name: Run Conversion (LCM Base + Scribble ControlNet)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # ۱. تبدیل مدل اصلی LCM (بهینه شده برای Neural Engine آیفون ۱۲)
+          python -m python_coreml_stable_diffusion.torch2coreml \
+            --convert-unet --convert-text-encoder --convert-vae-decoder --convert-safety-checker \
+            --model-version "SimianLuo/LCM_Dreamshaper_v7" \
+            --quantize-nbits 6 --chunk-unet --attention-implementation SPLIT_EINSUM \
+            -o ./output --bundle-resources-for-swift-cli
+            
+          # ۲. تبدیل مدل ControlNet Scribble (برای استفاده همزمان)
+          python -m python_coreml_stable_diffusion.torch2coreml \
+            --convert-controlnet --controlnet-model-version "lllyasviel/sd-controlnet-scribble" \
+            --model-version "runwayml/stable-diffusion-v1-5" \
+            --quantize-nbits 6 -o ./output
+
+      - name: Zip & Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iPhone12-LCM-Scribble-6bit
+          path: ./output
