@@ -1,55 +1,79 @@
 name: iPhone 12 CoreML Converter
-on: workflow_dispatch
+
+on:
+  workflow_dispatch:
 
 jobs:
   convert:
     runs-on: macos-14
+
     steps:
-      - uses: actions/checkout@v4
-      
+      # 1. دریافت سورس
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. نصب پایتون پایدار
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          
-      - name: Install Tools & Fix Dependency Conflict
+          python-version: "3.11"
+
+      # 3. نصب وابستگی‌ها (نسخه‌های کاملاً سازگار)
+      - name: Install dependencies (stable matrix)
         run: |
           python -m pip install --upgrade pip setuptools
-          # قفل کردن نسخه‌ها برای پایداری ۱۰۰٪ در محیط مک
+
           pip install \
             "numpy<2.0" \
             "scikit-learn==1.5.1" \
             "huggingface_hub==0.20.3" \
             "diffusers==0.25.1" \
+            "accelerate==0.25.0" \
             "transformers==4.36.2" \
+            "torch==2.1.2" \
+            "torchvision==0.16.2" \
             "coremltools==8.0" \
-            torch torchvision \
-            scipy ftfy accelerate pytest diffusionkit
-          
+            scipy \
+            ftfy \
+            sentencepiece \
+            safetensors \
+            pytest
+
+          # کلون ریپوی رسمی اپل
           git clone https://github.com/apple/ml-stable-diffusion
-          
-      - name: Run Conversion
+
+      # 4. تبدیل مدل‌ها به CoreML
+      - name: Convert LCM + ControlNet (iPhone 12 optimized)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}/ml-stable-diffusion
         run: |
           cd ml-stable-diffusion
-          
-          # ۱. تبدیل مدل اصلی LCM (بهینه‌سازی شده برای ANE آیفون ۱۲)
-          python -m python_coreml_stable_diffusion.torch2coreml \
-            --convert-unet --convert-text-encoder --convert-vae-decoder --convert-safety-checker \
-            --model-version "SimianLuo/LCM_Dreamshaper_v7" \
-            --quantize-nbits 6 --chunk-unet --attention-implementation SPLIT_EINSUM \
-            -o ../output --bundle-resources-for-swift-cli
-            
-          # ۲. تبدیل مدل ControlNet Scribble
-          python -m python_coreml_stable_diffusion.torch2coreml \
-            --convert-controlnet --controlnet-model-version "lllyasviel/sd-controlnet-scribble" \
-            --model-version "runwayml/stable-diffusion-v1-5" \
-            --quantize-nbits 6 -o ../output
 
-      - name: Zip & Upload Artifact
+          # ---- Phase 1: LCM Base Model ----
+          python -m python_coreml_stable_diffusion.torch2coreml \
+            --convert-unet \
+            --convert-text-encoder \
+            --convert-vae-decoder \
+            --convert-safety-checker \
+            --model-version "SimianLuo/LCM_Dreamshaper_v7" \
+            --quantize-nbits 6 \
+            --chunk-unet \
+            --attention-implementation SPLIT_EINSUM \
+            -o ../output \
+            --bundle-resources-for-swift-cli
+
+          # ---- Phase 2: ControlNet Scribble ----
+          python -m python_coreml_stable_diffusion.torch2coreml \
+            --convert-controlnet \
+            --controlnet-model-version "lllyasviel/sd-controlnet-scribble" \
+            --model-version "runwayml/stable-diffusion-v1-5" \
+            --quantize-nbits 6 \
+            -o ../output
+
+      # 5. خروجی نهایی
+      - name: Upload CoreML Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iPhone12-LCM-Scribble-Final-Model
+          name: iPhone12-LCM-ControlNet-6bit-CoreML
           path: ./output
