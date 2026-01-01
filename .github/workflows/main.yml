@@ -1,9 +1,9 @@
 name: iPhone 12 CoreML Converter
-on: workflow_dispatch # اجرای دستی
+on: workflow_dispatch
 
 jobs:
   convert:
-    runs-on: macos-14 # استفاده از پردازنده M1/M2 گیت‌هاب
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       
@@ -14,27 +14,31 @@ jobs:
           
       - name: Install Tools & Fix Versions
         run: |
-          pip install --upgrade pip setuptools
-          # نصب نسخه‌های پایدار برای جلوگیری از تداخل
-          pip install "scikit-learn==1.5.1" "coremltools>=7.1" torch torchvision diffusers==0.25.1 transformers==4.36.2 huggingface-hub pytest diffusionkit scipy ftfy accelerate
+          python -m pip install --upgrade pip setuptools
+          # اجبار به نصب نسخه ۱ نامپای برای جلوگیری از کرش باینری
+          pip install "numpy<2.0" "scikit-learn==1.5.1" "coremltools==8.0" torch torchvision diffusers==0.25.1 transformers==4.36.2 huggingface-hub pytest diffusionkit scipy ftfy accelerate
           git clone https://github.com/apple/ml-stable-diffusion
           
-      - name: Run Conversion (LCM Base + Scribble ControlNet)
+      - name: Run Conversion
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          # معرفی مسیر ماژول به سیستم عامل
+          PYTHONPATH: ${{ github.workspace }}/ml-stable-diffusion
         run: |
-          # ۱. تبدیل مدل اصلی LCM (بهینه شده برای Neural Engine آیفون ۱۲)
+          cd ml-stable-diffusion
+          
+          # ۱. تبدیل مدل اصلی LCM (iPhone 12 Optimized)
           python -m python_coreml_stable_diffusion.torch2coreml \
             --convert-unet --convert-text-encoder --convert-vae-decoder --convert-safety-checker \
             --model-version "SimianLuo/LCM_Dreamshaper_v7" \
             --quantize-nbits 6 --chunk-unet --attention-implementation SPLIT_EINSUM \
-            -o ./output --bundle-resources-for-swift-cli
+            -o ../output --bundle-resources-for-swift-cli
             
-          # ۲. تبدیل مدل ControlNet Scribble (برای استفاده همزمان)
+          # ۲. تبدیل مدل ControlNet Scribble
           python -m python_coreml_stable_diffusion.torch2coreml \
             --convert-controlnet --controlnet-model-version "lllyasviel/sd-controlnet-scribble" \
             --model-version "runwayml/stable-diffusion-v1-5" \
-            --quantize-nbits 6 -o ./output
+            --quantize-nbits 6 -o ../output
 
       - name: Zip & Upload Artifact
         uses: actions/upload-artifact@v4
